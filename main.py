@@ -1,6 +1,7 @@
 import pygame
 import random
 import sys
+import os
 
 # 初始化 Pygame
 pygame.init()
@@ -10,6 +11,8 @@ WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 700
 FPS = 60
 MAX_ROUNDS = 5
+DICE_ANIMATION_FRAMES = 20  # 骰子动画帧数
+DICE_ANIMATION_SPEED = 3    # 骰子动画速度
 
 # 颜色定义
 WHITE = (255, 255, 255)
@@ -82,6 +85,37 @@ class Game:
         self.event_log = []
         self.game_over = False
         self.victory = False
+
+        # 骰子相关
+        self.dice_images = self.load_dice_images()
+        self.dice_animating = False
+        self.dice_animation_frame = 0
+        self.dice_result = 1
+        self.show_choices = False  # 是否显示选项
+        self.auto_result_text = ""  # 自动执行结果文本
+        self.waiting_for_next = False  # 等待进入下一回合
+
+    def load_dice_images(self):
+        """加载骰子图片"""
+        dice_images = []
+        for i in range(1, 7):
+            try:
+                img_path = os.path.join("static", "骰子", f"{i}.png")
+                img = pygame.image.load(img_path)
+                # 调整骰子大小
+                img = pygame.transform.scale(img, (150, 150))
+                dice_images.append(img)
+            except Exception as e:
+                print(f"加载骰子图片 {i}.png 失败: {e}")
+                # 创建一个简单的占位图
+                placeholder = pygame.Surface((150, 150))
+                placeholder.fill(WHITE)
+                pygame.draw.rect(placeholder, BLACK, (0, 0, 150, 150), 3)
+                font = pygame.font.Font(None, 72)
+                text = font.render(str(i), True, BLACK)
+                placeholder.blit(text, (60, 40))
+                dice_images.append(placeholder)
+        return dice_images
         
     def create_events(self):
         """创建所有可能的事件"""
@@ -436,6 +470,45 @@ class Game:
         else:
             return f"自然淘汰，损失 {loss} 个体"
     
+    def start_dice_animation(self):
+        """开始骰子动画"""
+        self.dice_animating = True
+        self.dice_animation_frame = 0
+        self.dice_result = random.randint(1, 6)
+        self.show_choices = False
+        self.auto_result_text = ""
+        self.waiting_for_next = False
+
+    def update_dice_animation(self):
+        """更新骰子动画"""
+        if self.dice_animating:
+            self.dice_animation_frame += 1
+            if self.dice_animation_frame >= DICE_ANIMATION_FRAMES:
+                # 动画结束
+                self.dice_animating = False
+                # 40%概率显示选项
+                if random.random() < 0.4:
+                    self.show_choices = True
+                else:
+                    # 自动执行随机选项
+                    self.auto_execute_choice()
+
+    def auto_execute_choice(self):
+        """自动执行随机选项"""
+        if self.current_event:
+            choice_index = random.randint(0, len(self.current_event.choices) - 1)
+            choice_text, effect_func = self.current_event.choices[choice_index]
+            result = effect_func()
+            self.auto_result_text = f"骰子决定: {choice_text}\n结果: {result}"
+            self.event_log.append(f"{self.current_event.title}: {result}")
+
+            # 检查种族是否存活
+            if not self.race.is_alive():
+                self.game_over = True
+                self.event_log.append("种族灭绝...")
+            else:
+                self.waiting_for_next = True
+
     def next_round(self):
         """进入下一回合"""
         self.race.round += 1
@@ -453,24 +526,26 @@ class Game:
                 self.game_over = True
                 self.event_log.append("食物不足，种族灭绝...")
                 return
-        
+
         # 检查胜利条件
         if self.race.generation >= 10:
             self.victory = True
             self.game_over = True
             return
-        
+
         # 随机事件
         self.current_event = random.choice(self.create_events())
+        # 开始骰子动画
+        self.start_dice_animation()
     
     def draw(self):
         """绘制游戏界面"""
         self.screen.fill(WHITE)
-        
+
         # 标题
         title = TITLE_FONT.render("短命种族模拟器", True, BLACK)
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 20))
-        
+
         # 状态栏
         y_offset = 80
         status_texts = [
@@ -479,74 +554,104 @@ class Game:
             f"食物储备: {self.race.food}",
             f"进化特性: {', '.join(self.race.traits) if self.race.traits else '无'}"
         ]
-        
+
         for text in status_texts:
             surf = TEXT_FONT.render(text, True, BLUE)
             self.screen.blit(surf, (50, y_offset))
             y_offset += 35
+
+        # 绘制骰子
+        if self.dice_animating:
+            # 动画中，随机显示骰子
+            dice_index = random.randint(0, 5)
+            dice_img = self.dice_images[dice_index]
+        else:
+            # 显示最终结果
+            dice_img = self.dice_images[self.dice_result - 1]
+
+        dice_x = WINDOW_WIDTH // 2 - 75
+        dice_y = 220
+        self.screen.blit(dice_img, (dice_x, dice_y))
         
         # 游戏结束界面
         if self.game_over:
             pygame.draw.rect(self.screen, DARK_GRAY, (150, 250, 700, 300))
             pygame.draw.rect(self.screen, BLACK, (150, 250, 700, 300), 3)
-            
+
             if self.victory:
                 end_text = EVENT_FONT.render("胜利！种族存活了10代！", True, GREEN)
             else:
                 end_text = EVENT_FONT.render("游戏结束 - 种族灭绝", True, RED)
-            
+
             self.screen.blit(end_text, (WINDOW_WIDTH // 2 - end_text.get_width() // 2, 300))
-            
+
             final_stats = [
                 f"最终代数: {self.race.generation}",
                 f"最终种群: {self.race.population}",
                 f"进化特性: {len(self.race.traits)} 个"
             ]
-            
+
             y = 360
             for stat in final_stats:
                 surf = TEXT_FONT.render(stat, True, WHITE)
                 self.screen.blit(surf, (WINDOW_WIDTH // 2 - surf.get_width() // 2, y))
                 y += 40
-            
+
             restart_text = SMALL_FONT.render("按 R 重新开始 | 按 ESC 退出", True, YELLOW)
             self.screen.blit(restart_text, (WINDOW_WIDTH // 2 - restart_text.get_width() // 2, 500))
-            
+
+            pygame.display.flip()
+            return
+
+        # 骰子动画提示
+        if self.dice_animating:
+            hint_text = TEXT_FONT.render("投掷骰子中...", True, RED)
+            self.screen.blit(hint_text, (WINDOW_WIDTH // 2 - hint_text.get_width() // 2, 390))
             pygame.display.flip()
             return
         
         # 当前事件
         if self.current_event:
-            # 事件框
-            pygame.draw.rect(self.screen, GRAY, (100, 230, 800, 400))
-            pygame.draw.rect(self.screen, BLACK, (100, 230, 800, 400), 3)
-            
             # 事件标题
             event_title = EVENT_FONT.render(self.current_event.title, True, RED)
-            self.screen.blit(event_title, (WINDOW_WIDTH // 2 - event_title.get_width() // 2, 250))
-            
+            self.screen.blit(event_title, (WINDOW_WIDTH // 2 - event_title.get_width() // 2, 400))
+
             # 事件描述
             desc = TEXT_FONT.render(self.current_event.description, True, BLACK)
-            self.screen.blit(desc, (WINDOW_WIDTH // 2 - desc.get_width() // 2, 300))
-            
-            # 选项按钮
-            y_pos = 370
-            for i, (choice_text, _) in enumerate(self.current_event.choices):
-                button_rect = pygame.Rect(150, y_pos, 700, 50)
-                mouse_pos = pygame.mouse.get_pos()
-                
-                if button_rect.collidepoint(mouse_pos):
-                    pygame.draw.rect(self.screen, GREEN, button_rect)
-                else:
-                    pygame.draw.rect(self.screen, DARK_GRAY, button_rect)
-                
-                pygame.draw.rect(self.screen, BLACK, button_rect, 2)
-                
-                choice_surf = TEXT_FONT.render(f"{i+1}. {choice_text}", True, WHITE)
-                self.screen.blit(choice_surf, (button_rect.x + 20, button_rect.y + 12))
-                
-                y_pos += 70
-        
+            self.screen.blit(desc, (WINDOW_WIDTH // 2 - desc.get_width() // 2, 450))
+
+            # 显示选项或自动结果
+            if self.show_choices:
+                # 显示选项按钮
+                y_pos = 500
+                for i, (choice_text, _) in enumerate(self.current_event.choices):
+                    button_rect = pygame.Rect(150, y_pos, 700, 50)
+                    mouse_pos = pygame.mouse.get_pos()
+
+                    if button_rect.collidepoint(mouse_pos):
+                        pygame.draw.rect(self.screen, GREEN, button_rect)
+                    else:
+                        pygame.draw.rect(self.screen, DARK_GRAY, button_rect)
+
+                    pygame.draw.rect(self.screen, BLACK, button_rect, 2)
+
+                    choice_surf = TEXT_FONT.render(f"{i+1}. {choice_text}", True, WHITE)
+                    self.screen.blit(choice_surf, (button_rect.x + 20, button_rect.y + 12))
+
+                    y_pos += 70
+            elif self.waiting_for_next:
+                # 显示自动执行结果
+                lines = self.auto_result_text.split('\n')
+                y_pos = 500
+                for line in lines:
+                    result_surf = TEXT_FONT.render(line, True, BLUE)
+                    self.screen.blit(result_surf, (WINDOW_WIDTH // 2 - result_surf.get_width() // 2, y_pos))
+                    y_pos += 40
+
+                # 提示按空格继续
+                hint = SMALL_FONT.render("按空格键继续...", True, YELLOW)
+                self.screen.blit(hint, (WINDOW_WIDTH // 2 - hint.get_width() // 2, 620))
+
         pygame.display.flip()
     
     def handle_choice(self, choice_index):
@@ -566,15 +671,18 @@ class Game:
     def run(self):
         """游戏主循环"""
         self.next_round()  # 开始第一个事件
-        
+
         running = True
         while running:
             self.clock.tick(FPS)
-            
+
+            # 更新骰子动画
+            self.update_dice_animation()
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                
+
                 if event.type == pygame.KEYDOWN:
                     if self.game_over:
                         if event.key == pygame.K_r:
@@ -587,27 +695,31 @@ class Game:
                         elif event.key == pygame.K_ESCAPE:
                             running = False
                     else:
-                        # 数字键选择
-                        if event.key == pygame.K_1:
-                            self.handle_choice(0)
-                        elif event.key == pygame.K_2:
-                            self.handle_choice(1)
-                        elif event.key == pygame.K_3:
-                            self.handle_choice(2)
-                
-                if event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
+                        # 空格键继续下一回合
+                        if event.key == pygame.K_SPACE and self.waiting_for_next:
+                            self.next_round()
+                        # 数字键选择（仅在显示选项时）
+                        elif self.show_choices:
+                            if event.key == pygame.K_1:
+                                self.handle_choice(0)
+                            elif event.key == pygame.K_2:
+                                self.handle_choice(1)
+                            elif event.key == pygame.K_3:
+                                self.handle_choice(2)
+
+                if event.type == pygame.MOUSEBUTTONDOWN and not self.game_over and self.show_choices:
                     mouse_pos = pygame.mouse.get_pos()
                     # 检查按钮点击
-                    y_pos = 370
+                    y_pos = 500
                     for i in range(len(self.current_event.choices) if self.current_event else 0):
                         button_rect = pygame.Rect(150, y_pos, 700, 50)
                         if button_rect.collidepoint(mouse_pos):
                             self.handle_choice(i)
                             break
                         y_pos += 70
-            
+
             self.draw()
-        
+
         pygame.quit()
         sys.exit()
 

@@ -1,6 +1,6 @@
-# Nvwa-2
+# Nvwa
 
-Nvwa-2 is a game project developed in Python. The project features a graphical user interface and various game assets, including images and GIFs for events and outcomes.
+Nvwa is a game project developed in Python. The project features a graphical user interface and various game assets, including images and GIFs for events and outcomes.
 
 ## Features
 - Interactive gameplay with random events

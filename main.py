@@ -2,17 +2,22 @@ import pygame
 import random
 import sys
 import os
+from PIL import Image, ImageSequence
 
 # 初始化 Pygame
 pygame.init()
 
+# 获取屏幕分辨率
+screen_info = pygame.display.Info()
+SCREEN_WIDTH = screen_info.current_w
+SCREEN_HEIGHT = screen_info.current_h
+
 # 常量定义
-WINDOW_WIDTH = 1000
-WINDOW_HEIGHT = 700
+WINDOW_WIDTH = SCREEN_WIDTH
+WINDOW_HEIGHT = SCREEN_HEIGHT
 FPS = 60
 MAX_ROUNDS = 5
-DICE_ANIMATION_FRAMES = 20  # 骰子动画帧数
-DICE_ANIMATION_SPEED = 3    # 骰子动画速度
+DICE_ANIMATION_FRAMES = 30  # 骰子动画帧数
 
 # 颜色定义
 WHITE = (255, 255, 255)
@@ -23,77 +28,93 @@ GREEN = (50, 200, 50)
 RED = (200, 50, 50)
 BLUE = (50, 100, 200)
 YELLOW = (220, 200, 50)
+LIGHT_BLUE = (173, 216, 230)
+ORANGE = (255, 165, 0)
 
 # 字体设置
 pygame.font.init()
 # 使用系统中文字体
 try:
     # Windows 系统字体
-    TITLE_FONT = pygame.font.SysFont('microsoftyahei', 48)
-    EVENT_FONT = pygame.font.SysFont('microsoftyahei', 36)
-    TEXT_FONT = pygame.font.SysFont('microsoftyahei', 28)
-    SMALL_FONT = pygame.font.SysFont('microsoftyahei', 24)
+    TITLE_FONT = pygame.font.SysFont('microsoftyahei', 56)
+    EVENT_FONT = pygame.font.SysFont('microsoftyahei', 40)
+    TEXT_FONT = pygame.font.SysFont('microsoftyahei', 32)
+    SMALL_FONT = pygame.font.SysFont('microsoftyahei', 28)
+    TINY_FONT = pygame.font.SysFont('microsoftyahei', 24)
 except:
     # 备用字体
     try:
-        TITLE_FONT = pygame.font.SysFont('simsun', 48)
-        EVENT_FONT = pygame.font.SysFont('simsun', 36)
-        TEXT_FONT = pygame.font.SysFont('simsun', 28)
-        SMALL_FONT = pygame.font.SysFont('simsun', 24)
+        TITLE_FONT = pygame.font.SysFont('simsun', 56)
+        EVENT_FONT = pygame.font.SysFont('simsun', 40)
+        TEXT_FONT = pygame.font.SysFont('simsun', 32)
+        SMALL_FONT = pygame.font.SysFont('simsun', 28)
+        TINY_FONT = pygame.font.SysFont('simsun', 24)
     except:
         # 最后备用
-        TITLE_FONT = pygame.font.Font(None, 48)
-        EVENT_FONT = pygame.font.Font(None, 36)
-        TEXT_FONT = pygame.font.Font(None, 28)
-        SMALL_FONT = pygame.font.Font(None, 24)
+        TITLE_FONT = pygame.font.Font(None, 56)
+        EVENT_FONT = pygame.font.Font(None, 40)
+        TEXT_FONT = pygame.font.Font(None, 32)
+        SMALL_FONT = pygame.font.Font(None, 28)
+        TINY_FONT = pygame.font.Font(None, 24)
 
 
 class Race:
     """短命种族类"""
     def __init__(self):
-        self.population = 100
-        self.generation = 1
-        self.round = 1
-        self.traits = []  # 进化特性
-        self.food = 50
-        self.shelter = False
-        
-    def add_trait(self, trait):
-        if trait not in self.traits:
-            self.traits.append(trait)
-    
+        self.population = 5  # 初始人口为5
+        self.food = 0  # 粮食
+        self.defense = 0  # 防御
+        self.tech = 0  # 科技
+        self.round = 1  # 当前回合
+
     def is_alive(self):
         return self.population > 0
 
 
-class Event:
-    """事件类"""
-    def __init__(self, title, description, choices):
-        self.title = title
-        self.description = description
-        self.choices = choices  # [(选项文本, 效果函数), ...]
+class RandomEvent:
+    """随机事件类"""
+    def __init__(self, name, gif_frames, population_change):
+        self.name = name
+        self.gif_frames = gif_frames  # GIF动画帧列表
+        self.population_change = population_change  # 人口变化量
+        self.current_frame = 0  # 当前帧索引
+        self.frame_counter = 0  # 帧计数器
+        self.frame_delay = 3  # 每3帧切换一次GIF帧
 
 
 class Game:
     """游戏主类"""
     def __init__(self):
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        # 创建全屏窗口
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
         pygame.display.set_caption("短命种族模拟器")
         self.clock = pygame.time.Clock()
         self.race = Race()
-        self.current_event = None
-        self.event_log = []
         self.game_over = False
-        self.victory = False
+        self.game_started = False  # 游戏是否开始
+
+        # 游戏状态
+        self.state = "START"  # START, DICE, RESOURCE_CHOICE, EVENT, GAME_OVER
 
         # 骰子相关
         self.dice_images = self.load_dice_images()
         self.dice_animating = False
         self.dice_animation_frame = 0
         self.dice_result = 1
-        self.show_choices = False  # 是否显示选项
-        self.auto_result_text = ""  # 自动执行结果文本
-        self.waiting_for_next = False  # 等待进入下一回合
+        self.resource_points = 0  # 本回合可分配资源点
+
+        # 事件相关
+        self.current_event = None
+        self.event_log = []
+
+        # UI素材
+        self.ui_images = self.load_ui_images()
+        self.event_gifs = self.load_event_gifs()
+        self.ending_images = self.load_ending_images()
+        self.ending_type = None  # 结局类型
+
+        # 随机事件列表
+        self.random_events = self.create_random_events()
 
     def load_dice_images(self):
         """加载骰子图片"""
@@ -103,381 +124,169 @@ class Game:
                 img_path = os.path.join("static", "骰子", f"{i}.png")
                 img = pygame.image.load(img_path)
                 # 调整骰子大小
-                img = pygame.transform.scale(img, (150, 150))
+                img = pygame.transform.scale(img, (200, 200))
                 dice_images.append(img)
             except Exception as e:
                 print(f"加载骰子图片 {i}.png 失败: {e}")
                 # 创建一个简单的占位图
-                placeholder = pygame.Surface((150, 150))
+                placeholder = pygame.Surface((200, 200))
                 placeholder.fill(WHITE)
-                pygame.draw.rect(placeholder, BLACK, (0, 0, 150, 150), 3)
-                font = pygame.font.Font(None, 72)
+                pygame.draw.rect(placeholder, BLACK, (0, 0, 200, 200), 3)
+                font = pygame.font.Font(None, 100)
                 text = font.render(str(i), True, BLACK)
-                placeholder.blit(text, (60, 40))
+                placeholder.blit(text, (75, 50))
                 dice_images.append(placeholder)
         return dice_images
-        
-    def create_events(self):
-        """创建所有可能的事件"""
-        events = []
-        
-        # 环境事件
-        events.append(Event(
-            "寒冬来袭",
-            "刺骨的寒风席卷而来，种群面临严峻考验...",
-            [
-                ("聚集取暖", lambda: self.effect_winter_huddle()),
-                ("寻找洞穴", lambda: self.effect_find_cave()),
-                ("继续觅食", lambda: self.effect_keep_foraging())
-            ]
-        ))
-        
-        events.append(Event(
-            "干旱",
-            "水源枯竭，食物变得稀缺...",
-            [
-                ("迁徙寻找水源", lambda: self.effect_migrate()),
-                ("节约资源", lambda: self.effect_conserve()),
-                ("挖掘地下水", lambda: self.effect_dig_water())
-            ]
-        ))
-        
-        events.append(Event(
-            "洪水",
-            "暴雨引发洪水，栖息地被淹没...",
-            [
-                ("爬上高地", lambda: self.effect_high_ground()),
-                ("建造木筏", lambda: self.effect_build_raft()),
-                ("原地等待", lambda: self.effect_wait_flood())
-            ]
-        ))
-        
-        events.append(Event(
-            "食物丰收",
-            "发现了大片果树林，食物充足！",
-            [
-                ("大量储存", lambda: self.effect_store_food()),
-                ("立即繁殖", lambda: self.effect_breed_now()),
-                ("继续探索", lambda: self.effect_explore_more())
-            ]
-        ))
-        
-        # 捕食者事件
-        events.append(Event(
-            "猛兽袭击",
-            "一群饥饿的猛兽盯上了你的种群！",
-            [
-                ("正面对抗", lambda: self.effect_fight_beast()),
-                ("快速逃跑", lambda: self.effect_flee()),
-                ("分散隐藏", lambda: self.effect_hide())
-            ]
-        ))
-        
-        events.append(Event(
-            "天敌出现",
-            "天空中盘旋着巨大的猛禽...",
-            [
-                ("躲入地下", lambda: self.effect_underground()),
-                ("伪装自己", lambda: self.effect_camouflage()),
-                ("群体防御", lambda: self.effect_group_defense())
-            ]
-        ))
-        
-        # 繁殖事件
-        events.append(Event(
-            "繁殖季节",
-            "种群进入繁殖期，这是增加数量的好机会！",
-            [
-                ("大量繁殖", lambda: self.effect_mass_breed()),
-                ("精英繁殖", lambda: self.effect_elite_breed()),
-                ("延迟繁殖", lambda: self.effect_delay_breed())
-            ]
-        ))
-        
-        # 进化/突变事件
-        events.append(Event(
-            "基因突变",
-            "部分个体出现了奇特的变化...",
-            [
-                ("培育厚毛皮", lambda: self.effect_thick_fur()),
-                ("发展利爪", lambda: self.effect_claws()),
-                ("增强速度", lambda: self.effect_speed())
-            ]
-        ))
-        
-        events.append(Event(
-            "进化机遇",
-            "环境压力促使种群快速进化...",
-            [
-                ("体型变大", lambda: self.effect_larger_size()),
-                ("智力提升", lambda: self.effect_intelligence()),
-                ("适应环境", lambda: self.effect_adaptation())
-            ]
-        ))
-        
-        # 生存挑战
-        events.append(Event(
-            "饥饿危机",
-            "食物储备告急，种群陷入饥荒...",
-            [
-                ("狩猎冒险", lambda: self.effect_risky_hunt()),
-                ("减少进食", lambda: self.effect_ration()),
-                ("寻找新食物", lambda: self.effect_new_food())
-            ]
-        ))
-        
-        events.append(Event(
-            "疾病爆发",
-            "一种未知疾病在种群中蔓延...",
-            [
-                ("隔离病患", lambda: self.effect_quarantine()),
-                ("寻找草药", lambda: self.effect_medicine()),
-                ("自然淘汰", lambda: self.effect_natural_selection())
-            ]
-        ))
-        
+
+    def load_ui_images(self):
+        """加载UI素材"""
+        ui_images = {}
+        ui_files = {
+            'title': '标题.png',
+            'start_button': '开始按钮.png',
+            'text_box': '文字框.png',
+            'option_h': '选项框（横板）.png',
+            'option_v': '选项框（竖版）.png'
+        }
+        for key, filename in ui_files.items():
+            try:
+                img_path = os.path.join("static", "UI", filename)
+                img = pygame.image.load(img_path)
+                ui_images[key] = img
+            except Exception as e:
+                print(f"加载UI图片 {filename} 失败: {e}")
+                ui_images[key] = None
+        return ui_images
+
+    def load_event_gifs(self):
+        """加载事件GIF动画（使用PIL加载所有帧）"""
+        event_gifs = {}
+        event_files = {
+            '干旱': '干旱.gif',
+            '丰收': '丰收.gif',
+            '寒冬': '寒冬.gif',
+            '洪水': '洪水.gif',
+            '发现沃土': '发现沃土.gif'
+        }
+        for key, filename in event_files.items():
+            try:
+                img_path = os.path.join("static", "随机事件gif", filename)
+                # 使用PIL加载GIF的所有帧
+                pil_image = Image.open(img_path)
+                frames = []
+
+                # 提取所有帧
+                for frame in ImageSequence.Iterator(pil_image):
+                    # 转换为RGBA模式
+                    frame = frame.convert('RGBA')
+                    # 转换为pygame surface
+                    frame_str = frame.tobytes()
+                    frame_surface = pygame.image.fromstring(frame_str, frame.size, 'RGBA')
+                    # 缩放到合适大小
+                    frame_surface = pygame.transform.scale(frame_surface, (400, 300))
+                    frames.append(frame_surface)
+
+                event_gifs[key] = frames
+                print(f"成功加载 {filename}，共 {len(frames)} 帧")
+            except Exception as e:
+                print(f"加载事件图片 {filename} 失败: {e}")
+                # 创建占位图
+                placeholder = pygame.Surface((400, 300))
+                placeholder.fill(LIGHT_BLUE)
+                pygame.draw.rect(placeholder, BLACK, (0, 0, 400, 300), 3)
+                text = SMALL_FONT.render(key, True, BLACK)
+                placeholder.blit(text, (200 - text.get_width()//2, 140))
+                event_gifs[key] = [placeholder]  # 作为单帧列表
+        return event_gifs
+
+    def load_ending_images(self):
+        """加载结局图片"""
+        ending_images = {}
+        ending_files = {
+            '种族灭绝': '种族灭绝.png',
+            '原始永恒': '原始永恒.png',
+            '人口繁盛': '人口繁盛.png',
+            '农耕时代': '农耕时代.png',
+            '科学革命': '科学革命.png',
+            '乌托邦': '乌托邦.png',
+            '智能危机': '人口过载.png'
+        }
+        for key, filename in ending_files.items():
+            try:
+                img_path = os.path.join("static", "游戏结局png", filename)
+                img = pygame.image.load(img_path)
+                img = pygame.transform.scale(img, (800, 500))
+                ending_images[key] = img
+            except Exception as e:
+                print(f"加载结局图片 {filename} 失败: {e}")
+                # 创建占位图
+                placeholder = pygame.Surface((800, 500))
+                placeholder.fill(DARK_GRAY)
+                pygame.draw.rect(placeholder, BLACK, (0, 0, 800, 500), 3)
+                text = EVENT_FONT.render(key, True, WHITE)
+                placeholder.blit(text, (400 - text.get_width()//2, 240))
+                ending_images[key] = placeholder
+        return ending_images
+
+    def create_random_events(self):
+        """创建5种随机事件"""
+        events = [
+            RandomEvent("干旱", self.event_gifs.get('干旱'), -1),
+            RandomEvent("丰收", self.event_gifs.get('丰收'), 2),
+            RandomEvent("寒冬", self.event_gifs.get('寒冬'), -1),
+            RandomEvent("洪水", self.event_gifs.get('洪水'), -2),
+            RandomEvent("发现沃土", self.event_gifs.get('发现沃土'), 2)
+        ]
         return events
-    
-    # 效果函数
-    def effect_winter_huddle(self):
-        loss = max(10, int(self.race.population * 0.1))
-        if "厚毛皮" in self.race.traits:
-            loss = loss // 2
-        self.race.population -= loss
-        return f"聚集取暖，损失了 {loss} 个体"
-    
-    def effect_find_cave(self):
-        if random.random() < 0.6:
-            self.race.shelter = True
-            loss = max(5, int(self.race.population * 0.05))
-            self.race.population -= loss
-            return f"找到了庇护所！损失 {loss} 个体"
-        else:
-            loss = max(15, int(self.race.population * 0.15))
-            self.race.population -= loss
-            return f"没找到合适的洞穴，损失 {loss} 个体"
-    
-    def effect_keep_foraging(self):
-        self.race.food += 10
-        loss = max(20, int(self.race.population * 0.2))
-        self.race.population -= loss
-        return f"获得食物 +10，但损失了 {loss} 个体"
-    
-    def effect_migrate(self):
-        if random.random() < 0.5:
-            self.race.food += 20
-            loss = max(10, int(self.race.population * 0.1))
-            self.race.population -= loss
-            return f"成功找到水源！食物 +20，损失 {loss} 个体"
-        else:
-            loss = max(25, int(self.race.population * 0.25))
-            self.race.population -= loss
-            return f"迁徙失败，损失惨重 -{loss} 个体"
-    
-    def effect_conserve(self):
-        self.race.food = max(0, self.race.food - 5)
-        loss = max(8, int(self.race.population * 0.08))
-        self.race.population -= loss
-        return f"节约资源，食物 -5，损失 {loss} 个体"
-    
-    def effect_dig_water(self):
-        if random.random() < 0.4:
-            self.race.food += 15
-            return f"挖到地下水！食物 +15"
-        else:
-            loss = max(12, int(self.race.population * 0.12))
-            self.race.population -= loss
-            return f"挖掘失败，浪费体力，损失 {loss} 个体"
-    
-    def effect_high_ground(self):
-        loss = max(5, int(self.race.population * 0.05))
-        self.race.population -= loss
-        return f"成功避开洪水，损失 {loss} 个体"
-    
-    def effect_build_raft(self):
-        if "智力提升" in self.race.traits:
-            self.race.food += 10
-            return f"成功建造木筏！食物 +10"
-        else:
-            loss = max(15, int(self.race.population * 0.15))
-            self.race.population -= loss
-            return f"建造失败，损失 {loss} 个体"
-    
-    def effect_wait_flood(self):
-        loss = max(30, int(self.race.population * 0.3))
-        self.race.population -= loss
-        return f"洪水造成重大损失 -{loss} 个体"
-    
-    def effect_store_food(self):
-        self.race.food += 30
-        return f"储存大量食物 +30"
-    
-    def effect_breed_now(self):
-        gain = max(20, int(self.race.population * 0.3))
-        self.race.population += gain
-        self.race.food -= 10
-        return f"种群增长 +{gain}，食物 -10"
-    
-    def effect_explore_more(self):
-        if random.random() < 0.5:
-            self.race.food += 40
-            return f"发现更多资源！食物 +40"
-        else:
-            self.race.food += 15
-            return f"探索收获一般，食物 +15"
-    
-    def effect_fight_beast(self):
-        if "利爪" in self.race.traits or "体型变大" in self.race.traits:
-            loss = max(10, int(self.race.population * 0.1))
-            self.race.population -= loss
-            self.race.food += 20
-            return f"击退猛兽！损失 {loss} 个体，获得食物 +20"
-        else:
-            loss = max(35, int(self.race.population * 0.35))
-            self.race.population -= loss
-            return f"战斗失败，损失惨重 -{loss} 个体"
-    
-    def effect_flee(self):
-        if "速度提升" in self.race.traits:
-            loss = max(5, int(self.race.population * 0.05))
-            self.race.population -= loss
-            return f"快速逃脱！仅损失 {loss} 个体"
-        else:
-            loss = max(20, int(self.race.population * 0.2))
-            self.race.population -= loss
-            return f"逃跑中损失 {loss} 个体"
-    
-    def effect_hide(self):
-        loss = max(12, int(self.race.population * 0.12))
-        self.race.population -= loss
-        return f"成功隐藏，损失 {loss} 个体"
-    
-    def effect_underground(self):
-        if self.race.shelter:
-            loss = max(3, int(self.race.population * 0.03))
-            self.race.population -= loss
-            return f"利用庇护所躲避，仅损失 {loss} 个体"
-        else:
-            loss = max(15, int(self.race.population * 0.15))
-            self.race.population -= loss
-            return f"匆忙躲藏，损失 {loss} 个体"
-    
-    def effect_camouflage(self):
-        if random.random() < 0.6:
-            loss = max(5, int(self.race.population * 0.05))
-            self.race.population -= loss
-            return f"伪装成功！损失 {loss} 个体"
-        else:
-            loss = max(18, int(self.race.population * 0.18))
-            self.race.population -= loss
-            return f"伪装失败，损失 {loss} 个体"
-    
-    def effect_group_defense(self):
-        loss = max(10, int(self.race.population * 0.1))
-        self.race.population -= loss
-        return f"群体防御，损失 {loss} 个体"
-    
-    def effect_mass_breed(self):
-        if self.race.food >= 20:
-            gain = max(40, int(self.race.population * 0.5))
-            self.race.population += gain
-            self.race.food -= 20
-            return f"大量繁殖成功！种群 +{gain}，食物 -20"
-        else:
-            return f"食物不足，繁殖失败"
-    
-    def effect_elite_breed(self):
-        gain = max(15, int(self.race.population * 0.2))
-        self.race.population += gain
-        self.race.food -= 10
-        return f"精英繁殖，种群 +{gain}，食物 -10"
-    
-    def effect_delay_breed(self):
-        self.race.food += 10
-        return f"延迟繁殖，节省食物 +10"
-    
-    def effect_thick_fur(self):
-        self.race.add_trait("厚毛皮")
-        return f"进化出厚毛皮！抗寒能力提升"
-    
-    def effect_claws(self):
-        self.race.add_trait("利爪")
-        return f"进化出利爪！战斗力提升"
-    
-    def effect_speed(self):
-        self.race.add_trait("速度提升")
-        return f"速度大幅提升！逃生能力增强"
-    
-    def effect_larger_size(self):
-        self.race.add_trait("体型变大")
-        self.race.food -= 15
-        return f"体型变大！战斗力提升，食物 -15"
-    
-    def effect_intelligence(self):
-        self.race.add_trait("智力提升")
-        return f"智力提升！解决问题能力增强"
-    
-    def effect_adaptation(self):
-        self.race.add_trait("环境适应")
-        return f"获得环境适应能力！"
-    
-    def effect_risky_hunt(self):
-        if random.random() < 0.5:
-            self.race.food += 25
-            loss = max(8, int(self.race.population * 0.08))
-            self.race.population -= loss
-            return f"狩猎成功！食物 +25，损失 {loss} 个体"
-        else:
-            loss = max(20, int(self.race.population * 0.2))
-            self.race.population -= loss
-            return f"狩猎失败，损失 {loss} 个体"
-    
-    def effect_ration(self):
-        loss = max(15, int(self.race.population * 0.15))
-        self.race.population -= loss
-        return f"减少进食，损失 {loss} 个体"
-    
-    def effect_new_food(self):
-        if random.random() < 0.6:
-            self.race.food += 20
-            return f"发现新食物来源！食物 +20"
-        else:
-            loss = max(10, int(self.race.population * 0.1))
-            self.race.population -= loss
-            return f"寻找失败，损失 {loss} 个体"
-    
-    def effect_quarantine(self):
-        loss = max(12, int(self.race.population * 0.12))
-        self.race.population -= loss
-        return f"隔离病患，控制疫情，损失 {loss} 个体"
-    
-    def effect_medicine(self):
-        if "智力提升" in self.race.traits:
-            loss = max(5, int(self.race.population * 0.05))
-            self.race.population -= loss
-            return f"找到草药治疗！仅损失 {loss} 个体"
-        else:
-            loss = max(15, int(self.race.population * 0.15))
-            self.race.population -= loss
-            return f"草药效果有限，损失 {loss} 个体"
-    
-    def effect_natural_selection(self):
-        loss = max(25, int(self.race.population * 0.25))
-        self.race.population -= loss
-        if random.random() < 0.3:
-            self.race.add_trait("抗病能力")
-            return f"自然淘汰，损失 {loss} 个体，但获得抗病能力"
-        else:
-            return f"自然淘汰，损失 {loss} 个体"
-    
+
+    def determine_ending(self):
+        """判定游戏结局"""
+        x = self.race.population
+        food = self.race.food
+        defense = self.race.defense
+        tech = self.race.tech
+
+        # 按优先级判定结局
+        # 1. 种族灭绝
+        if x == 0:
+            return '种族灭绝'
+
+        # 2. 原始永恒
+        if 0 < x <= 7:
+            return '原始永恒'
+
+        # 3. 人口繁盛及其特殊结局
+        if 7 < x <= 10:
+            # 3.1 农耕时代
+            if food >= 8 and tech >= 5:
+                return '农耕时代'
+            # 3.2 科学革命
+            if food >= 10 and 3 <= defense < 5 and tech >= 8:
+                return '科学革命'
+            # 3.3 乌托邦
+            if food >= 10 and tech >= 10:
+                return '乌托邦'
+            # 3.0 普通人口繁盛
+            return '人口繁盛'
+
+        # 4. 智能危机（人口过载）
+        if x >= 10 and food >= 8 and defense >= 5 and tech >= 10:
+            return '智能危机'
+
+        # 默认返回人口繁盛（x>10但不满足智能危机条件）
+        return '人口繁盛'
+
+    def start_game(self):
+        """开始游戏"""
+        self.game_started = True
+        self.state = "DICE"
+        self.start_dice_animation()
+
     def start_dice_animation(self):
         """开始骰子动画"""
         self.dice_animating = True
         self.dice_animation_frame = 0
         self.dice_result = random.randint(1, 6)
-        self.show_choices = False
-        self.auto_result_text = ""
-        self.waiting_for_next = False
 
     def update_dice_animation(self):
         """更新骰子动画"""
@@ -486,81 +295,257 @@ class Game:
             if self.dice_animation_frame >= DICE_ANIMATION_FRAMES:
                 # 动画结束
                 self.dice_animating = False
-                # 40%概率显示选项
-                if random.random() < 0.4:
-                    self.show_choices = True
-                else:
-                    # 自动执行随机选项
-                    self.auto_execute_choice()
+                self.resource_points = self.dice_result
+                self.state = "RESOURCE_CHOICE"
 
-    def auto_execute_choice(self):
-        """自动执行随机选项"""
-        if self.current_event:
-            choice_index = random.randint(0, len(self.current_event.choices) - 1)
-            choice_text, effect_func = self.current_event.choices[choice_index]
-            result = effect_func()
-            self.auto_result_text = f"骰子决定: {choice_text}\n结果: {result}"
-            self.event_log.append(f"{self.current_event.title}: {result}")
+    def allocate_resource(self, resource_type):
+        """分配资源点"""
+        if resource_type == "food":
+            self.race.food += self.resource_points
+        elif resource_type == "defense":
+            self.race.defense += self.resource_points
+        elif resource_type == "tech":
+            self.race.tech += self.resource_points
 
-            # 检查种族是否存活
-            if not self.race.is_alive():
-                self.game_over = True
-                self.event_log.append("种族灭绝...")
-            else:
-                self.waiting_for_next = True
+        # 触发随机事件
+        self.trigger_random_event()
+
+    def trigger_random_event(self):
+        """触发随机事件"""
+        # 随机选择一个事件
+        self.current_event = random.choice(self.random_events)
+
+        # 记录事件前的人口
+        old_population = self.race.population
+
+        # 应用人口变化
+        self.race.population += self.current_event.population_change
+
+        # 确保人口不为负数
+        if self.race.population < 0:
+            self.race.population = 0
+
+        # 切换到事件显示状态
+        self.state = "EVENT"
+
+        # 记录事件日志
+        self.event_log.append(f"第{self.race.round}回合: {self.current_event.name} (人口{self.current_event.population_change:+d})")
+
+        # 打印调试信息
+        print(f"触发事件: {self.current_event.name}, 人口变化: {old_population} -> {self.race.population}")
 
     def next_round(self):
         """进入下一回合"""
-        self.race.round += 1
-        if self.race.round > MAX_ROUNDS:
-            # 新一代
-            self.race.generation += 1
-            self.race.round = 1
-            # 繁殖新一代
-            if self.race.food >= 10:
-                new_pop = max(50, int(self.race.population * 0.8))
-                self.race.population = new_pop
-                self.race.food -= 10
-                self.event_log.append(f"第 {self.race.generation} 代诞生！种群: {new_pop}")
-            else:
-                self.game_over = True
-                self.event_log.append("食物不足，种族灭绝...")
-                return
-
-        # 检查胜利条件
-        if self.race.generation >= 10:
-            self.victory = True
-            self.game_over = True
+        # 检查是否存活
+        if not self.race.is_alive():
+            self.end_game()
             return
 
-        # 随机事件
-        self.current_event = random.choice(self.create_events())
-        # 开始骰子动画
-        self.start_dice_animation()
-    
+        self.race.round += 1
+
+        # 检查是否游戏结束
+        if self.race.round > MAX_ROUNDS:
+            self.end_game()
+        else:
+            # 继续下一回合
+            self.state = "DICE"
+            self.start_dice_animation()
+
+    def end_game(self):
+        """结束游戏"""
+        self.ending_type = self.determine_ending()
+        self.state = "GAME_OVER"
+        self.game_over = True
+
     def draw(self):
         """绘制游戏界面"""
         self.screen.fill(WHITE)
 
-        # 标题
-        title = TITLE_FONT.render("短命种族模拟器", True, BLACK)
-        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 20))
+        if self.state == "START":
+            self.draw_start_screen()
+        elif self.state == "DICE":
+            self.draw_game_screen()
+            self.draw_dice()
+        elif self.state == "RESOURCE_CHOICE":
+            self.draw_game_screen()
+            self.draw_dice()
+            self.draw_resource_choice()
+        elif self.state == "EVENT":
+            self.draw_game_screen()
+            self.draw_event()
+        elif self.state == "GAME_OVER":
+            self.draw_ending_screen()
 
-        # 状态栏
-        y_offset = 80
-        status_texts = [
-            f"第 {self.race.generation} 代  |  回合: {self.race.round}/{MAX_ROUNDS}",
-            f"种群数量: {self.race.population}",
-            f"食物储备: {self.race.food}",
-            f"进化特性: {', '.join(self.race.traits) if self.race.traits else '无'}"
+        pygame.display.flip()
+
+    def draw_start_screen(self):
+        """绘制开始界面"""
+        # 绘制标题图片
+        if self.ui_images.get('title'):
+            title_img = self.ui_images['title']
+            title_img = pygame.transform.scale(title_img, (700, 180))
+            self.screen.blit(title_img, (WINDOW_WIDTH // 2 - 350, 100))
+        else:
+            title = TITLE_FONT.render("短命种族模拟器", True, BLACK)
+            self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 150))
+
+        # 绘制开始按钮（使用UI素材）
+        button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 150, 350, 300, 100)
+        mouse_pos = pygame.mouse.get_pos()
+
+        if self.ui_images.get('start_button'):
+            start_btn_img = self.ui_images['start_button']
+            start_btn_img = pygame.transform.scale(start_btn_img, (300, 100))
+            self.screen.blit(start_btn_img, (WINDOW_WIDTH // 2 - 150, 350))
+        else:
+            if button_rect.collidepoint(mouse_pos):
+                pygame.draw.rect(self.screen, GREEN, button_rect, border_radius=10)
+            else:
+                pygame.draw.rect(self.screen, BLUE, button_rect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, button_rect, 3, border_radius=10)
+            start_text = EVENT_FONT.render("开始游戏", True, WHITE)
+            self.screen.blit(start_text, (WINDOW_WIDTH // 2 - start_text.get_width() // 2, 380))
+
+        # 存储按钮区域供点击检测
+        self.start_button_rect = button_rect
+
+        # 游戏说明（使用文字框背景）
+        instructions = [
+            "游戏规则：",
+            "1. 每回合投掷骰子获得资源点（1-6点）",
+            "2. 选择将资源点分配到粮食、防御或科技",
+            "3. 每回合结束后触发随机事件影响人口",
+            "4. 游戏共5回合，根据最终状态判定结局"
         ]
 
-        for text in status_texts:
-            surf = TEXT_FONT.render(text, True, BLUE)
-            self.screen.blit(surf, (50, y_offset))
-            y_offset += 35
+        # 绘制文字框背景
+        text_box_y = 480
+        text_box_width = 800
+        text_box_height = 250
+        if self.ui_images.get('text_box'):
+            text_box_img = self.ui_images['text_box']
+            text_box_img = pygame.transform.scale(text_box_img, (text_box_width, text_box_height))
+            self.screen.blit(text_box_img, (WINDOW_WIDTH // 2 - text_box_width // 2, text_box_y))
+        else:
+            pygame.draw.rect(self.screen, LIGHT_BLUE, (WINDOW_WIDTH // 2 - text_box_width // 2, text_box_y, text_box_width, text_box_height), border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, (WINDOW_WIDTH // 2 - text_box_width // 2, text_box_y, text_box_width, text_box_height), 2, border_radius=10)
 
-        # 绘制骰子
+        # 文字在框内居中，留出边距
+        y = text_box_y + 40
+        for instruction in instructions:
+            text = TINY_FONT.render(instruction, True, BLACK)
+            # 确保文字在框内
+            x = WINDOW_WIDTH // 2 - text.get_width() // 2
+            # 限制在文字框范围内
+            if x < WINDOW_WIDTH // 2 - text_box_width // 2 + 20:
+                x = WINDOW_WIDTH // 2 - text_box_width // 2 + 20
+            self.screen.blit(text, (x, y))
+            y += 38
+
+    def draw_game_screen(self):
+        """绘制游戏主界面（状态栏）"""
+        # 标题
+        title = TEXT_FONT.render("短命种族模拟器", True, BLACK)
+        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, int(WINDOW_HEIGHT * 0.02)))
+
+        # 左上角状态栏（使用文字框背景）
+        status_box_x = int(WINDOW_WIDTH * 0.02)
+        status_box_y = int(WINDOW_HEIGHT * 0.08)
+        status_box_width = int(WINDOW_WIDTH * 0.18)
+        status_box_height = int(WINDOW_HEIGHT * 0.35)
+
+        # 绘制状态框背景
+        if self.ui_images.get('text_box'):
+            status_bg = self.ui_images['text_box']
+            status_bg = pygame.transform.scale(status_bg, (status_box_width, status_box_height))
+            self.screen.blit(status_bg, (status_box_x, status_box_y))
+        else:
+            pygame.draw.rect(self.screen, LIGHT_BLUE, (status_box_x, status_box_y, status_box_width, status_box_height), border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, (status_box_x, status_box_y, status_box_width, status_box_height), 2, border_radius=10)
+
+        # 回合信息和资源状态（确保在框内）
+        text_x = status_box_x + 20  # 左边距20像素
+        text_y = status_box_y + 20  # 上边距20像素
+
+        # 回合信息
+        round_text = SMALL_FONT.render(f"回合: {self.race.round}/{MAX_ROUNDS}", True, BLUE)
+        self.screen.blit(round_text, (text_x, text_y))
+        text_y += 45
+
+        # 分隔线
+        line_y = text_y
+        pygame.draw.line(self.screen, BLACK, (text_x, line_y), (status_box_x + status_box_width - 20, line_y), 2)
+        text_y += 15
+
+        # 资源状态
+        status_items = [
+            (f"人口: {self.race.population}", RED),
+            (f"粮食: {self.race.food}", GREEN),
+            (f"防御: {self.race.defense}", BLUE),
+            (f"科技: {self.race.tech}", ORANGE)
+        ]
+
+        for text, color in status_items:
+            surf = TEXT_FONT.render(text, True, color)
+            # 确保文字不超出框的右边界
+            if surf.get_width() > status_box_width - 40:
+                # 如果文字太长，使用小字体
+                surf = SMALL_FONT.render(text, True, color)
+            self.screen.blit(surf, (text_x, text_y))
+            text_y += 50
+
+        # 事件日志（右上角）
+        if self.event_log:
+            # 绘制日志背景
+            log_box_x = int(WINDOW_WIDTH * 0.8)
+            log_box_y = int(WINDOW_HEIGHT * 0.08)
+            log_box_width = int(WINDOW_WIDTH * 0.18)
+            log_box_height = int(WINDOW_HEIGHT * 0.35)
+
+            if self.ui_images.get('text_box'):
+                log_box = self.ui_images['text_box']
+                log_box = pygame.transform.scale(log_box, (log_box_width, log_box_height))
+                self.screen.blit(log_box, (log_box_x, log_box_y))
+            else:
+                pygame.draw.rect(self.screen, LIGHT_BLUE, (log_box_x, log_box_y, log_box_width, log_box_height), border_radius=10)
+                pygame.draw.rect(self.screen, BLACK, (log_box_x, log_box_y, log_box_width, log_box_height), 2, border_radius=10)
+
+            # 标题在框内
+            log_title = SMALL_FONT.render("事件记录:", True, BLACK)
+            self.screen.blit(log_title, (log_box_x + 20, log_box_y + 15))
+
+            # 分隔线
+            line_y = log_box_y + 50
+            pygame.draw.line(self.screen, BLACK, (log_box_x + 20, line_y), (log_box_x + log_box_width - 20, line_y), 2)
+
+            # 显示最近的事件（最多5条），确保文字在框内
+            log_y = line_y + 15
+            max_width = log_box_width - 40  # 左右各留20像素边距
+
+            for log_entry in self.event_log[-5:]:
+                # 如果文字太长，截断
+                log_surf = TINY_FONT.render(log_entry, True, BLACK)
+
+                # 如果文字超出宽度，逐步缩短
+                if log_surf.get_width() > max_width:
+                    parts = log_entry.split(': ')
+                    if len(parts) >= 2:
+                        # 尝试不同长度
+                        for length in [10, 8, 6, 4]:
+                            short_text = f"{parts[0][:6]}: {parts[1][:length]}..."
+                            log_surf = TINY_FONT.render(short_text, True, BLACK)
+                            if log_surf.get_width() <= max_width:
+                                break
+
+                self.screen.blit(log_surf, (log_box_x + 20, log_y))
+                log_y += 45
+
+                # 确保不超出框的底部
+                if log_y > log_box_y + log_box_height - 30:
+                    break
+
+    def draw_dice(self):
+        """绘制骰子"""
         if self.dice_animating:
             # 动画中，随机显示骰子
             dice_index = random.randint(0, 5)
@@ -569,154 +554,286 @@ class Game:
             # 显示最终结果
             dice_img = self.dice_images[self.dice_result - 1]
 
-        dice_x = WINDOW_WIDTH // 2 - 75
-        dice_y = 220
+        dice_x = WINDOW_WIDTH // 2 - 100
+        dice_y = 300
         self.screen.blit(dice_img, (dice_x, dice_y))
-        
-        # 游戏结束界面
-        if self.game_over:
-            pygame.draw.rect(self.screen, DARK_GRAY, (150, 250, 700, 300))
-            pygame.draw.rect(self.screen, BLACK, (150, 250, 700, 300), 3)
 
-            if self.victory:
-                end_text = EVENT_FONT.render("胜利！种族存活了10代！", True, GREEN)
-            else:
-                end_text = EVENT_FONT.render("游戏结束 - 种族灭绝", True, RED)
-
-            self.screen.blit(end_text, (WINDOW_WIDTH // 2 - end_text.get_width() // 2, 300))
-
-            final_stats = [
-                f"最终代数: {self.race.generation}",
-                f"最终种群: {self.race.population}",
-                f"进化特性: {len(self.race.traits)} 个"
-            ]
-
-            y = 360
-            for stat in final_stats:
-                surf = TEXT_FONT.render(stat, True, WHITE)
-                self.screen.blit(surf, (WINDOW_WIDTH // 2 - surf.get_width() // 2, y))
-                y += 40
-
-            restart_text = SMALL_FONT.render("按 R 重新开始 | 按 ESC 退出", True, YELLOW)
-            self.screen.blit(restart_text, (WINDOW_WIDTH // 2 - restart_text.get_width() // 2, 500))
-
-            pygame.display.flip()
-            return
-
-        # 骰子动画提示
         if self.dice_animating:
             hint_text = TEXT_FONT.render("投掷骰子中...", True, RED)
-            self.screen.blit(hint_text, (WINDOW_WIDTH // 2 - hint_text.get_width() // 2, 390))
-            pygame.display.flip()
-            return
-        
-        # 当前事件
-        if self.current_event:
-            # 事件标题
-            event_title = EVENT_FONT.render(self.current_event.title, True, RED)
-            self.screen.blit(event_title, (WINDOW_WIDTH // 2 - event_title.get_width() // 2, 400))
+            self.screen.blit(hint_text, (WINDOW_WIDTH // 2 - hint_text.get_width() // 2, 520))
+        else:
+            result_text = TEXT_FONT.render(f"获得 {self.dice_result} 点资源", True, BLUE)
+            self.screen.blit(result_text, (WINDOW_WIDTH // 2 - result_text.get_width() // 2, 520))
 
-            # 事件描述
-            desc = TEXT_FONT.render(self.current_event.description, True, BLACK)
-            self.screen.blit(desc, (WINDOW_WIDTH // 2 - desc.get_width() // 2, 450))
+    def draw_resource_choice(self):
+        """绘制资源选择界面"""
+        hint_text = SMALL_FONT.render("请选择分配资源：", True, BLACK)
+        self.screen.blit(hint_text, (WINDOW_WIDTH // 2 - hint_text.get_width() // 2, 560))
 
-            # 显示选项或自动结果
-            if self.show_choices:
-                # 显示选项按钮
-                y_pos = 500
-                for i, (choice_text, _) in enumerate(self.current_event.choices):
-                    button_rect = pygame.Rect(150, y_pos, 700, 50)
-                    mouse_pos = pygame.mouse.get_pos()
+        # 三个选项按钮（使用横板选项框）
+        button_width = 250
+        button_height = 80
+        button_spacing = 40
+        start_x = WINDOW_WIDTH // 2 - (button_width * 3 + button_spacing * 2) // 2
+        button_y = 610
 
-                    if button_rect.collidepoint(mouse_pos):
-                        pygame.draw.rect(self.screen, GREEN, button_rect)
-                    else:
-                        pygame.draw.rect(self.screen, DARK_GRAY, button_rect)
+        choices = [
+            ("粮食", "food", GREEN),
+            ("防御", "defense", BLUE),
+            ("科技", "tech", ORANGE)
+        ]
 
-                    pygame.draw.rect(self.screen, BLACK, button_rect, 2)
+        mouse_pos = pygame.mouse.get_pos()
 
-                    choice_surf = TEXT_FONT.render(f"{i+1}. {choice_text}", True, WHITE)
-                    self.screen.blit(choice_surf, (button_rect.x + 20, button_rect.y + 12))
+        for i, (label, resource_type, color) in enumerate(choices):
+            button_x = start_x + i * (button_width + button_spacing)
+            button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
 
-                    y_pos += 70
-            elif self.waiting_for_next:
-                # 显示自动执行结果
-                lines = self.auto_result_text.split('\n')
-                y_pos = 500
-                for line in lines:
-                    result_surf = TEXT_FONT.render(line, True, BLUE)
-                    self.screen.blit(result_surf, (WINDOW_WIDTH // 2 - result_surf.get_width() // 2, y_pos))
-                    y_pos += 40
+            # 存储按钮信息供点击检测
+            if not hasattr(self, 'resource_buttons'):
+                self.resource_buttons = {}
+            self.resource_buttons[resource_type] = button_rect
 
-                # 提示按空格继续
-                hint = SMALL_FONT.render("按空格键继续...", True, YELLOW)
-                self.screen.blit(hint, (WINDOW_WIDTH // 2 - hint.get_width() // 2, 620))
+            # 使用UI素材或绘制按钮
+            is_hover = button_rect.collidepoint(mouse_pos)
 
-        pygame.display.flip()
-    
-    def handle_choice(self, choice_index):
-        """处理玩家选择"""
-        if self.current_event and 0 <= choice_index < len(self.current_event.choices):
-            _, effect_func = self.current_event.choices[choice_index]
-            result = effect_func()
-            self.event_log.append(f"{self.current_event.title}: {result}")
-            
-            # 检查种族是否存活
-            if not self.race.is_alive():
-                self.game_over = True
-                self.event_log.append("种族灭绝...")
+            if self.ui_images.get('option_h'):
+                option_img = self.ui_images['option_h']
+                option_img = pygame.transform.scale(option_img, (button_width, button_height))
+                self.screen.blit(option_img, (button_x, button_y))
+                # 如果鼠标悬停，添加高亮效果
+                if is_hover:
+                    highlight = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+                    highlight.fill((255, 255, 255, 80))
+                    self.screen.blit(highlight, (button_x, button_y))
+                text_color = BLACK if not is_hover else color
             else:
-                self.next_round()
-    
+                if is_hover:
+                    pygame.draw.rect(self.screen, color, button_rect, border_radius=8)
+                    text_color = WHITE
+                else:
+                    pygame.draw.rect(self.screen, WHITE, button_rect, border_radius=8)
+                    pygame.draw.rect(self.screen, color, button_rect, 3, border_radius=8)
+                    text_color = color
+
+            text = TEXT_FONT.render(label, True, text_color)
+            self.screen.blit(text, (button_x + button_width // 2 - text.get_width() // 2,
+                                   button_y + button_height // 2 - text.get_height() // 2))
+
+    def draw_event(self):
+        """绘制事件界面"""
+        if not self.current_event:
+            return
+
+        # 大标题：随机事件
+        event_header = EVENT_FONT.render("随机事件发生！", True, RED)
+        self.screen.blit(event_header, (WINDOW_WIDTH // 2 - event_header.get_width() // 2, int(WINDOW_HEIGHT * 0.15)))
+
+        # 更新并绘制GIF动画
+        if self.current_event.gif_frames and len(self.current_event.gif_frames) > 0:
+            # 更新帧计数器
+            self.current_event.frame_counter += 1
+            if self.current_event.frame_counter >= self.current_event.frame_delay:
+                self.current_event.frame_counter = 0
+                self.current_event.current_frame = (self.current_event.current_frame + 1) % len(self.current_event.gif_frames)
+
+            # 绘制当前帧
+            current_frame = self.current_event.gif_frames[self.current_event.current_frame]
+            event_x = WINDOW_WIDTH // 2 - 200
+            event_y = int(WINDOW_HEIGHT * 0.3)
+            self.screen.blit(current_frame, (event_x, event_y))
+        else:
+            # 如果没有图片，显示占位框
+            event_y = int(WINDOW_HEIGHT * 0.3)
+            pygame.draw.rect(self.screen, LIGHT_BLUE, (WINDOW_WIDTH // 2 - 200, event_y, 400, 300), border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, (WINDOW_WIDTH // 2 - 200, event_y, 400, 300), 2, border_radius=10)
+            # 在占位框中显示事件名称
+            placeholder_text = EVENT_FONT.render(self.current_event.name, True, BLACK)
+            self.screen.blit(placeholder_text, (WINDOW_WIDTH // 2 - placeholder_text.get_width() // 2, event_y + 130))
+
+        # 事件名称和人口变化（使用文字框背景）
+        title_y = int(WINDOW_HEIGHT * 0.75)
+        text_box_width = int(WINDOW_WIDTH * 0.5)
+        text_box_height = 100
+        if self.ui_images.get('text_box'):
+            text_box_img = self.ui_images['text_box']
+            text_box_img = pygame.transform.scale(text_box_img, (text_box_width, text_box_height))
+            self.screen.blit(text_box_img, (WINDOW_WIDTH // 2 - text_box_width // 2, title_y))
+        else:
+            pygame.draw.rect(self.screen, LIGHT_BLUE, (WINDOW_WIDTH // 2 - text_box_width // 2, title_y, text_box_width, text_box_height), border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, (WINDOW_WIDTH // 2 - text_box_width // 2, title_y, text_box_width, text_box_height), 2, border_radius=10)
+
+        # 事件名称和人口变化在同一行
+        event_title = EVENT_FONT.render(self.current_event.name, True, RED)
+        pop_change_text = f"  人口{self.current_event.population_change:+d}"
+        pop_change_color = GREEN if self.current_event.population_change > 0 else RED
+        pop_surf = EVENT_FONT.render(pop_change_text, True, pop_change_color)
+
+        # 计算总宽度并居中
+        total_width = event_title.get_width() + pop_surf.get_width()
+        start_x = WINDOW_WIDTH // 2 - total_width // 2
+
+        # 确保在框内
+        if start_x < WINDOW_WIDTH // 2 - text_box_width // 2 + 20:
+            start_x = WINDOW_WIDTH // 2 - text_box_width // 2 + 20
+
+        self.screen.blit(event_title, (start_x, title_y + 30))
+        self.screen.blit(pop_surf, (start_x + event_title.get_width(), title_y + 30))
+
+        # 按空格继续提示（闪烁效果）
+        hint_y = int(WINDOW_HEIGHT * 0.9)
+        # 使用帧数实现闪烁效果
+        if (pygame.time.get_ticks() // 500) % 2 == 0:  # 每500ms切换一次
+            hint = TEXT_FONT.render("按空格键继续...", True, YELLOW)
+            self.screen.blit(hint, (WINDOW_WIDTH // 2 - hint.get_width() // 2, hint_y))
+
+    def draw_ending_screen(self):
+        """绘制结局界面"""
+        if not self.ending_type:
+            return
+
+        # 绘制结局图片
+        ending_img = self.ending_images.get(self.ending_type)
+        if ending_img:
+            img_x = WINDOW_WIDTH // 2 - 400
+            img_y = 80
+            self.screen.blit(ending_img, (img_x, img_y))
+
+        # 结局标题
+        title_y = int(WINDOW_HEIGHT * 0.65)
+        ending_title = TITLE_FONT.render(self.ending_type, True, BLUE)
+        self.screen.blit(ending_title, (WINDOW_WIDTH // 2 - ending_title.get_width() // 2, title_y))
+
+        # 最终数据（使用文字框背景）
+        stats_y = int(WINDOW_HEIGHT * 0.72)
+        stats_box_width = int(WINDOW_WIDTH * 0.5)
+        stats_box_height = 120
+        if self.ui_images.get('text_box'):
+            stats_box = self.ui_images['text_box']
+            stats_box = pygame.transform.scale(stats_box, (stats_box_width, stats_box_height))
+            self.screen.blit(stats_box, (WINDOW_WIDTH // 2 - stats_box_width // 2, stats_y))
+        else:
+            pygame.draw.rect(self.screen, LIGHT_BLUE, (WINDOW_WIDTH // 2 - stats_box_width // 2, stats_y, stats_box_width, stats_box_height), border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, (WINDOW_WIDTH // 2 - stats_box_width // 2, stats_y, stats_box_width, stats_box_height), 2, border_radius=10)
+
+        final_stats = [
+            f"最终人口: {self.race.population}",
+            f"粮食: {self.race.food}  |  防御: {self.race.defense}  |  科技: {self.race.tech}"
+        ]
+
+        # 文字在框内，留出边距
+        y = stats_y + 25
+        for stat in final_stats:
+            surf = TEXT_FONT.render(stat, True, BLACK)
+            x = WINDOW_WIDTH // 2 - surf.get_width() // 2
+            # 确保在框内，左右各留20像素边距
+            min_x = WINDOW_WIDTH // 2 - stats_box_width // 2 + 20
+            max_x = WINDOW_WIDTH // 2 + stats_box_width // 2 - surf.get_width() - 20
+            if x < min_x:
+                x = min_x
+            elif x > max_x:
+                x = max_x
+            self.screen.blit(surf, (x, y))
+            y += 40
+
+        # 重新开始按钮（下移）
+        button_width = int(WINDOW_WIDTH * 0.12)
+        button_height = int(WINDOW_HEIGHT * 0.06)
+        button_y = int(WINDOW_HEIGHT * 0.88)
+        restart_button_rect = pygame.Rect(WINDOW_WIDTH // 2 - button_width - 20, button_y, button_width, button_height)
+        exit_button_rect = pygame.Rect(WINDOW_WIDTH // 2 + 20, button_y, button_width, button_height)
+
+        # 存储按钮供点击检测
+        self.restart_button_rect = restart_button_rect
+        self.exit_button_rect = exit_button_rect
+
+        mouse_pos = pygame.mouse.get_pos()
+
+        # 重新开始按钮
+        if restart_button_rect.collidepoint(mouse_pos):
+            pygame.draw.rect(self.screen, GREEN, restart_button_rect, border_radius=8)
+            text_color = WHITE
+        else:
+            pygame.draw.rect(self.screen, WHITE, restart_button_rect, border_radius=8)
+            pygame.draw.rect(self.screen, GREEN, restart_button_rect, 3, border_radius=8)
+            text_color = GREEN
+
+        restart_text = TEXT_FONT.render("重新开始", True, text_color)
+        self.screen.blit(restart_text, (restart_button_rect.x + button_width // 2 - restart_text.get_width() // 2,
+                                       restart_button_rect.y + button_height // 2 - restart_text.get_height() // 2))
+
+        # 退出按钮
+        if exit_button_rect.collidepoint(mouse_pos):
+            pygame.draw.rect(self.screen, RED, exit_button_rect, border_radius=8)
+            text_color = WHITE
+        else:
+            pygame.draw.rect(self.screen, WHITE, exit_button_rect, border_radius=8)
+            pygame.draw.rect(self.screen, RED, exit_button_rect, 3, border_radius=8)
+            text_color = RED
+
+        exit_text = TEXT_FONT.render("退出游戏", True, text_color)
+        self.screen.blit(exit_text, (exit_button_rect.x + button_width // 2 - exit_text.get_width() // 2,
+                                    exit_button_rect.y + button_height // 2 - exit_text.get_height() // 2))
+
+    def reset_game(self):
+        """重置游戏"""
+        self.race = Race()
+        self.game_over = False
+        self.game_started = False
+        self.state = "START"
+        self.dice_animating = False
+        self.dice_animation_frame = 0
+        self.dice_result = 1
+        self.resource_points = 0
+        self.current_event = None
+        self.event_log = []
+        self.ending_type = None
+
     def run(self):
         """游戏主循环"""
-        self.next_round()  # 开始第一个事件
-
         running = True
         while running:
             self.clock.tick(FPS)
 
             # 更新骰子动画
-            self.update_dice_animation()
+            if self.state == "DICE":
+                self.update_dice_animation()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
 
                 if event.type == pygame.KEYDOWN:
-                    if self.game_over:
-                        if event.key == pygame.K_r:
-                            # 重新开始
-                            self.race = Race()
-                            self.event_log = []
-                            self.game_over = False
-                            self.victory = False
-                            self.next_round()
-                        elif event.key == pygame.K_ESCAPE:
-                            running = False
-                    else:
+                    # ESC键退出游戏（任何界面都可以）
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif self.state == "EVENT":
                         # 空格键继续下一回合
-                        if event.key == pygame.K_SPACE and self.waiting_for_next:
+                        if event.key == pygame.K_SPACE:
                             self.next_round()
-                        # 数字键选择（仅在显示选项时）
-                        elif self.show_choices:
-                            if event.key == pygame.K_1:
-                                self.handle_choice(0)
-                            elif event.key == pygame.K_2:
-                                self.handle_choice(1)
-                            elif event.key == pygame.K_3:
-                                self.handle_choice(2)
 
-                if event.type == pygame.MOUSEBUTTONDOWN and not self.game_over and self.show_choices:
+                if event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
-                    # 检查按钮点击
-                    y_pos = 500
-                    for i in range(len(self.current_event.choices) if self.current_event else 0):
-                        button_rect = pygame.Rect(150, y_pos, 700, 50)
-                        if button_rect.collidepoint(mouse_pos):
-                            self.handle_choice(i)
-                            break
-                        y_pos += 70
+
+                    if self.state == "START":
+                        # 检查开始按钮
+                        if hasattr(self, 'start_button_rect') and self.start_button_rect.collidepoint(mouse_pos):
+                            self.start_game()
+
+                    elif self.state == "RESOURCE_CHOICE":
+                        # 检查资源选择按钮
+                        if hasattr(self, 'resource_buttons'):
+                            for resource_type, button_rect in self.resource_buttons.items():
+                                if button_rect.collidepoint(mouse_pos):
+                                    self.allocate_resource(resource_type)
+                                    break
+
+                    elif self.state == "GAME_OVER":
+                        # 检查结局界面按钮
+                        if hasattr(self, 'restart_button_rect') and self.restart_button_rect.collidepoint(mouse_pos):
+                            self.reset_game()
+                        elif hasattr(self, 'exit_button_rect') and self.exit_button_rect.collidepoint(mouse_pos):
+                            running = False
 
             self.draw()
 

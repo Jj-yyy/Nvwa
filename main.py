@@ -198,7 +198,8 @@ class Game:
             'agricultural': '农耕时代.png',
             'scientific': '科学革命.png',
             'utopia': '乌托邦.png',
-            'ai_crisis': '人口过载.png'
+            'ai_crisis': '智能危机.png',
+            'population_overload': '人口过载.png'
         }
         for key, filename in ending_files.items():
             try:
@@ -275,8 +276,12 @@ class Game:
 
             return 'prosperous'
 
-        if x >= 10 and food >= 8 and defense >= 5 and tech >= 10:
-            return 'ai_crisis'
+        if x >= 10:
+            # 智能危机: 粮食≥8 且 防御≥25 且 科技≥10
+            if food >= 8 and defense >= 25 and tech >= 10:
+                return 'ai_crisis'
+            # 人口过载: 仅人口≥10
+            return 'population_overload'
 
         return 'prosperous'
 
@@ -842,6 +847,14 @@ class Game:
                 "",
                 "Your people face an uncertain future,",
                 "as they struggle with their own creations."
+            ],
+            "population_overload": [
+                "Population Overload has strained your civilization!",
+                "The rapid growth in numbers has exceeded",
+                "the capacity of available resources.",
+                "",
+                "Your people struggle to sustain themselves,",
+                "facing challenges of overcrowding and scarcity."
             ]
         }
 

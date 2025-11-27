@@ -26,31 +26,37 @@ BLUE = (50, 100, 200)
 YELLOW = (220, 200, 50)
 LIGHT_BLUE = (173, 216, 230)
 ORANGE = (255, 165, 0)
+TEXT_COLOR = (208, 107, 55)  # #D06B37
 
 pygame.font.init()
 
 try:
 
-    TITLE_FONT = pygame.font.SysFont('microsoftyahei', 56)
-    EVENT_FONT = pygame.font.SysFont('microsoftyahei', 40)
-    TEXT_FONT = pygame.font.SysFont('microsoftyahei', 32)
-    SMALL_FONT = pygame.font.SysFont('microsoftyahei', 28)
-    TINY_FONT = pygame.font.SysFont('microsoftyahei', 24)
+    TITLE_FONT = pygame.font.SysFont('microsoftyahei', 56, bold=True)
+    EVENT_FONT = pygame.font.SysFont('microsoftyahei', 40, bold=True)
+    TEXT_FONT = pygame.font.SysFont('microsoftyahei', 32, bold=True)
+    SMALL_FONT = pygame.font.SysFont('microsoftyahei', 28, bold=True)
+    TINY_FONT = pygame.font.SysFont('microsoftyahei', 24, bold=True)
 except:
 
     try:
-        TITLE_FONT = pygame.font.SysFont('simsun', 56)
-        EVENT_FONT = pygame.font.SysFont('simsun', 40)
-        TEXT_FONT = pygame.font.SysFont('simsun', 32)
-        SMALL_FONT = pygame.font.SysFont('simsun', 28)
-        TINY_FONT = pygame.font.SysFont('simsun', 24)
+        TITLE_FONT = pygame.font.SysFont('simsun', 56, bold=True)
+        EVENT_FONT = pygame.font.SysFont('simsun', 40, bold=True)
+        TEXT_FONT = pygame.font.SysFont('simsun', 32, bold=True)
+        SMALL_FONT = pygame.font.SysFont('simsun', 28, bold=True)
+        TINY_FONT = pygame.font.SysFont('simsun', 24, bold=True)
     except:
 
         TITLE_FONT = pygame.font.Font(None, 56)
+        TITLE_FONT.set_bold(True)
         EVENT_FONT = pygame.font.Font(None, 40)
+        EVENT_FONT.set_bold(True)
         TEXT_FONT = pygame.font.Font(None, 32)
+        TEXT_FONT.set_bold(True)
         SMALL_FONT = pygame.font.Font(None, 28)
+        SMALL_FONT.set_bold(True)
         TINY_FONT = pygame.font.Font(None, 24)
+        TINY_FONT.set_bold(True)
 
 class Race:
 
@@ -123,7 +129,7 @@ class Game:
                 placeholder.fill(WHITE)
                 pygame.draw.rect(placeholder, BLACK, (0, 0, 200, 200), 3)
                 font = pygame.font.Font(None, 100)
-                text = font.render(str(i), True, BLACK)
+                text = font.render(str(i), True, TEXT_COLOR)
                 placeholder.blit(text, (75, 50))
                 dice_images.append(placeholder)
         return dice_images
@@ -183,7 +189,7 @@ class Game:
                 placeholder = pygame.Surface((400, 300))
                 placeholder.fill(LIGHT_BLUE)
                 pygame.draw.rect(placeholder, BLACK, (0, 0, 400, 300), 3)
-                text = SMALL_FONT.render(key, True, BLACK)
+                text = SMALL_FONT.render(key, True, TEXT_COLOR)
                 placeholder.blit(text, (200 - text.get_width()//2, 140))
                 event_gifs[key] = [placeholder]
         return event_gifs
@@ -402,7 +408,7 @@ class Game:
             self.screen.blit(title_img_scaled, (title_x, title_y))
         else:
 
-            title = TITLE_FONT.render("Short-Lived Race Simulator", True, BLACK)
+            title = TITLE_FONT.render("Short-Lived Race Simulator", True, TEXT_COLOR)
             self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 3))
 
         if self.ui_images.get('start_button'):
@@ -463,9 +469,9 @@ class Game:
         total_text_height = 0
         text_surfaces = []
         for text in status_items:
-            surf = SMALL_FONT.render(text, True, BLACK)
+            surf = SMALL_FONT.render(text, True, TEXT_COLOR)
             if surf.get_width() > status_box_width - int(status_box_width * 0.25):
-                surf = TINY_FONT.render(text, True, BLACK)
+                surf = TINY_FONT.render(text, True, TEXT_COLOR)
             text_surfaces.append(surf)
             total_text_height += surf.get_height()
 
@@ -506,18 +512,18 @@ class Game:
         hint_box_height = status_box_height
 
         if self.state == "DICE_READY":
-            hint_text = TEXT_FONT.render("Click the dice to roll!", True, BLACK)
+            hint_text = TEXT_FONT.render("Click the dice to roll!", True, TEXT_COLOR)
             self.screen.blit(hint_text, (hint_box_x + hint_box_width // 2 - hint_text.get_width() // 2,
                                         hint_box_y + hint_box_height // 2 - hint_text.get_height() // 2))
         elif self.dice_animating:
-            hint_text = TEXT_FONT.render("Rolling the dice...", True, BLACK)
+            hint_text = TEXT_FONT.render("Rolling the dice...", True, TEXT_COLOR)
             self.screen.blit(hint_text, (hint_box_x + hint_box_width // 2 - hint_text.get_width() // 2,
                                         hint_box_y + hint_box_height // 2 - hint_text.get_height() // 2))
         else:
-            hint_text = TEXT_FONT.render(f"Congratulations on earning {self.dice_result}", True, BLACK)
-            hint_text2 = TEXT_FONT.render("resource points!", True, BLACK)
-            hint_text3 = SMALL_FONT.render("Which resource would you like to", True, BLACK)
-            hint_text4 = SMALL_FONT.render("allocate them to?", True, BLACK)
+            hint_text = TEXT_FONT.render(f"Congratulations on earning {self.dice_result}", True, TEXT_COLOR)
+            hint_text2 = TEXT_FONT.render("resource points!", True, TEXT_COLOR)
+            hint_text3 = SMALL_FONT.render("Which resource would you like to", True, TEXT_COLOR)
+            hint_text4 = SMALL_FONT.render("allocate them to?", True, TEXT_COLOR)
 
             text_start_y = hint_box_y + int(hint_box_height * 0.25)
             self.screen.blit(hint_text, (hint_box_x + hint_box_width // 2 - hint_text.get_width() // 2, text_start_y))
@@ -542,9 +548,9 @@ class Game:
             pygame.draw.rect(self.screen, (101, 67, 33), (dice_box_x, dice_box_y, dice_box_width, dice_box_height), 3, border_radius=10)
 
         if self.state == "DICE_READY":
-            click_text = SMALL_FONT.render("Click the dice to roll", True, BLACK)
+            click_text = SMALL_FONT.render("Click the dice to roll", True, TEXT_COLOR)
         else:
-            click_text = SMALL_FONT.render("", True, BLACK)
+            click_text = SMALL_FONT.render("", True, TEXT_COLOR)
         self.screen.blit(click_text, (dice_box_x + dice_box_width // 2 - click_text.get_width() // 2, dice_box_y + int(dice_box_height * 0.15)))
 
         if self.dice_animating:
@@ -611,7 +617,7 @@ class Game:
                     highlight = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
                     highlight.fill((255, 255, 255, 80))
                     self.screen.blit(highlight, (button_x, button_y))
-                text_color = BLACK if not is_hover else color
+                text_color = TEXT_COLOR
             else:
                 if is_hover:
                     pygame.draw.rect(self.screen, color, button_rect, border_radius=8)
@@ -619,7 +625,7 @@ class Game:
                 else:
                     pygame.draw.rect(self.screen, (240, 230, 200), button_rect, border_radius=8)
                     pygame.draw.rect(self.screen, (101, 67, 33), button_rect, 3, border_radius=8)
-                    text_color = BLACK
+                    text_color = TEXT_COLOR
 
             text = TEXT_FONT.render(label, True, text_color)
             self.screen.blit(text, (button_x + button_width // 2 - text.get_width() // 2,
@@ -667,9 +673,9 @@ class Game:
         total_text_height = 0
         text_surfaces = []
         for text in status_items:
-            surf = SMALL_FONT.render(text, True, BLACK)
+            surf = SMALL_FONT.render(text, True, TEXT_COLOR)
             if surf.get_width() > status_box_width - int(status_box_width * 0.25):
-                surf = TINY_FONT.render(text, True, BLACK)
+                surf = TINY_FONT.render(text, True, TEXT_COLOR)
             text_surfaces.append(surf)
             total_text_height += surf.get_height()
 
@@ -696,7 +702,7 @@ class Game:
             pygame.draw.rect(self.screen, (240, 230, 200), (desc_box_x, desc_box_y, desc_box_width, desc_box_height), border_radius=10)
             pygame.draw.rect(self.screen, (101, 67, 33), (desc_box_x, desc_box_y, desc_box_width, desc_box_height), 3, border_radius=10)
 
-        event_title = EVENT_FONT.render(self.current_event.name, True, BLACK)
+        event_title = EVENT_FONT.render(self.current_event.name, True, TEXT_COLOR)
 
         desc_lines = []
         if hasattr(self.current_event, 'description') and self.current_event.description:
@@ -721,13 +727,13 @@ class Game:
         current_y += event_title.get_height() + 30
 
         for line in desc_lines:
-            desc_surf = SMALL_FONT.render(line, True, BLACK)
+            desc_surf = SMALL_FONT.render(line, True, TEXT_COLOR)
             self.screen.blit(desc_surf, (desc_box_x + desc_box_width // 2 - desc_surf.get_width() // 2, current_y))
             current_y += 35
 
         current_y += 20
 
-        pop_surf = SMALL_FONT.render(pop_change_text, True, BLACK)
+        pop_surf = SMALL_FONT.render(pop_change_text, True, TEXT_COLOR)
         self.screen.blit(pop_surf, (desc_box_x + desc_box_width // 2 - pop_surf.get_width() // 2, current_y))
         current_y += pop_surf.get_height() + 10
 
@@ -755,7 +761,7 @@ class Game:
             pygame.draw.rect(self.screen, (240, 230, 200), confirm_btn_rect, border_radius=8)
             pygame.draw.rect(self.screen, (101, 67, 33), confirm_btn_rect, 3, border_radius=8)
 
-        confirm_text = TEXT_FONT.render("Confirm", True, BLACK)
+        confirm_text = TEXT_FONT.render("Confirm", True, TEXT_COLOR)
         self.screen.blit(confirm_text, (confirm_btn_x + confirm_btn_width // 2 - confirm_text.get_width() // 2,
                                        confirm_btn_y + confirm_btn_height // 2 - confirm_text.get_height() // 2))
 
@@ -785,7 +791,7 @@ class Game:
             pygame.draw.rect(self.screen, (240, 230, 200), (left_box_x, left_box_y, left_box_width, left_box_height), border_radius=10)
             pygame.draw.rect(self.screen, (101, 67, 33), (left_box_x, left_box_y, left_box_width, left_box_height), 3, border_radius=10)
 
-        ending_title = EVENT_FONT.render(self.ending_type, True, BLACK)
+        ending_title = EVENT_FONT.render(self.ending_type, True, TEXT_COLOR)
         title_x = left_box_x + left_box_width // 2 - ending_title.get_width() // 2
         title_y = left_box_y + int(left_box_height * 0.15)
         self.screen.blit(ending_title, (title_x, title_y))
@@ -861,7 +867,7 @@ class Game:
         desc_lines = ending_descriptions.get(self.ending_type, ["Game Over", "", "Your journey has ended."])
         for line in desc_lines:
             if line:
-                desc_surf = SMALL_FONT.render(line, True, BLACK)
+                desc_surf = SMALL_FONT.render(line, True, TEXT_COLOR)
                 desc_x = left_box_x + left_box_width // 2 - desc_surf.get_width() // 2
                 self.screen.blit(desc_surf, (desc_x, desc_y))
             desc_y += 35
@@ -890,9 +896,9 @@ class Game:
         total_text_height = 0
         text_surfaces = []
         for text in final_stats:
-            surf = SMALL_FONT.render(text, True, BLACK)
+            surf = SMALL_FONT.render(text, True, TEXT_COLOR)
             if surf.get_width() > right_box_width - int(right_box_width * 0.25):
-                surf = TINY_FONT.render(text, True, BLACK)
+                surf = TINY_FONT.render(text, True, TEXT_COLOR)
             text_surfaces.append(surf)
             total_text_height += surf.get_height()
 
@@ -930,7 +936,7 @@ class Game:
             pygame.draw.rect(self.screen, (240, 230, 200), restart_button_rect, border_radius=8)
             pygame.draw.rect(self.screen, (101, 67, 33), restart_button_rect, 3, border_radius=8)
 
-        restart_text = TEXT_FONT.render("Restart", True, BLACK)
+        restart_text = TEXT_FONT.render("Restart", True, TEXT_COLOR)
         self.screen.blit(restart_text, (restart_btn_x + restart_btn_width // 2 - restart_text.get_width() // 2,
                                        restart_btn_y + restart_btn_height // 2 - restart_text.get_height() // 2))
 

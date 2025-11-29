@@ -283,10 +283,10 @@ class Game:
             return 'prosperous'
 
         if x >= 10:
-            # 智能危机: 粮食≥8 且 防御≥25 且 科技≥10
+            # AI Crisis: Food ≥ 8, Defense ≥ 25, Technology ≥ 10, and Population ≥ 10
             if food >= 8 and defense >= 25 and tech >= 10:
                 return 'ai_crisis'
-            # 人口过载: 仅人口≥10
+            # Population Overload
             return 'population_overload'
 
         return 'prosperous'
